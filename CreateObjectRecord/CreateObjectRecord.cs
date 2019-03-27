@@ -18,14 +18,14 @@ namespace CreateObjectRecord
 	{
 		#region variables
 
-		private IRSAPIClient _client;
+		private IRSAPIClient _irsApiClient;
 		private int _workspaceId;
-		private readonly string _workspaceName = "Nserio - Regression Test";
+		private readonly string _workspaceName = "Workspace Name";
 		private IDBContext _dbContext;
 		private IServicesMgr _servicesManager;
 		private IDBContext _eddsDbContext;
-		private const String _SCRIPT_NAME = "Create Object Records after Field Parsing";
-		private const String _SAVED_SEARCH_NAME = "Diana Test";
+		private const string _SCRIPT_NAME = "Create Object Records after Field Parsing";
+		private const string _SAVED_SEARCH_NAME = "Diana Test";
 		private const string _FIELD1 = "EmailTo";
 		private const string _FIELD2 = "";
 		private const string _FIELD3 = "";
@@ -33,11 +33,12 @@ namespace CreateObjectRecord
 		private const string _FIELD5 = "";
 		private const string _DELIMITER = ";";
 		private const string _FIELD_TO_POPULATE = "FieldToPopulate";
+		private const string IDENTITY_FIELD_NAME = "Control Number";
 		private const string _COUNTFIELD = "CountNserioField";
-		private static Int32 _ARTIFACTTYPEID = 1000046; // Find a better way to not hard code this
-		private Int32 _numberOfDocuments = 5;
-		private string _foldername = "Test Folder";
-		private Int32 _rootFolderArtifactID;
+		private static readonly int _ARTIFACTTYPEID = 1000046; // Find a better way to not hard code this
+		private readonly int _numberOfDocuments = 5;
+		private readonly string _foldername = "Test Folder";
+		private readonly int _rootFolderArtifactID;
 
 		#endregion
 
@@ -53,29 +54,19 @@ namespace CreateObjectRecord
 			_servicesManager = helper.GetServicesManager();
 			
 			//create client
-			_client = helper.GetServicesManager().GetProxy<IRSAPIClient>(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD);
+			_irsApiClient = helper.GetServicesManager().GetProxy<IRSAPIClient>(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD);
 		
 			//Get workspace ID of the workspace for Nserio or Create a workspace
-			_workspaceId = GetWorkspaceId(_workspaceName, _client);
+			_workspaceId = GetWorkspaceId(_workspaceName, _irsApiClient);
 
 			// Create DBContext
 			_eddsDbContext = helper.GetDBContext(-1);
-			_dbContext = new DbContext(ConfigurationHelper.SQL_SERVER_ADDRESS, "EDDS" + _workspaceId, ConfigurationHelper.SQL_USER_NAME, ConfigurationHelper.SQL_PASSWORD);
-			_client.APIOptions.WorkspaceID = _workspaceId;
+			_dbContext = new DbContext(ConfigurationHelper.SQL_SERVER_ADDRESS, "EDDS" + _workspaceId, 
+				ConfigurationHelper.SQL_USER_NAME, ConfigurationHelper.SQL_PASSWORD);
+			_irsApiClient.APIOptions.WorkspaceID = _workspaceId;
 
 			//Import Documents to workspace
 			ImportHelper.Import.ImportDocument(_workspaceId);
-
-			//Import Application to the workspace
-			//File path of the Test App
-			var filepathTestApp = "..\\RA_Create_Object_Record_Test_APP.rap";
-
-			//File path of the application containing the actual script
-			var filepathApp = "..\\RA_Create_Object_Records_After_Field_Parsing.rap";
-
-			//Importing the applications
-			Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathTestApp);
-		    Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathApp);
 		}
 
 		#endregion
@@ -86,9 +77,8 @@ namespace CreateObjectRecord
 		public void Execute_TestFixtureTeardown()
 		{
 			//Delete all the results from script execution
-			DeleteAllObjectsOfSpecificTypeInWorkspace(_client, _workspaceId, _ARTIFACTTYPEID);
+			DeleteAllObjectsOfSpecificTypeInWorkspace(_irsApiClient, _workspaceId, _ARTIFACTTYPEID);
 		}
-
 		#endregion
 
 		#region Tests
@@ -97,156 +87,55 @@ namespace CreateObjectRecord
 		public void Integration_Test_Golden_Flow_Valid()
 		{
 			//Arrange
-			Int32 FieldToPopulate = GetFieldArtifactID(_FIELD_TO_POPULATE, _workspaceId, _client, _ARTIFACTTYPEID);
-			Int32 CountField = GetFieldArtifactID(_COUNTFIELD, _workspaceId, _client, _ARTIFACTTYPEID);
+			int IDENTITY_EXIST = GetFieldArtifactID(IDENTITY_FIELD_NAME, _workspaceId, _irsApiClient);
+			int CountField = GetFieldArtifactID(_COUNTFIELD, _workspaceId, _irsApiClient);
 
-			//Act
-			var scriptResults = ExecuteScript_CreateObjectRecordAfterFieldParsing(_SCRIPT_NAME, _workspaceId, _SAVED_SEARCH_NAME, _FIELD1, _DELIMITER, FieldToPopulate, CountField);
-		
+			DocumentExist("11Works", _workspaceId);
+
 			//Assert
-			Assert.AreEqual(true, scriptResults.Success);
+			Assert.IsTrue(true);
 		}
 
 		#endregion
 
 		#region Helpers
 
-		public RelativityScriptResult ExecuteScript_CreateObjectRecordAfterFieldParsing(String scriptName, Int32 workspaceArtifactId, String savedSearchName, string FieldName1, String Delimiter, Int32 fieldToPopulate, Int32 CountToField)
+		public void DocumentExist(string filter,
+			int workspaceArtifactId)
 		{
-			_client.APIOptions.WorkspaceID = _workspaceId;
+			_irsApiClient.APIOptions.WorkspaceID = _workspaceId;
 
 			//Retrieve script by name
-			Query<RelativityScript> relScriptQuery = new Query<RelativityScript>
+			Query<Document> documentScript = new Query<Document>
 			{
-				Condition = new TextCondition(RelativityScriptFieldNames.Name, TextConditionEnum.EqualTo, scriptName),
+				Condition = new TextCondition("Control Number", TextConditionEnum.EqualTo, filter),
 				Fields = FieldValue.AllFields
 			};
 
-			QueryResultSet<RelativityScript> relScriptQueryResults = _client.Repositories.RelativityScript.Query(relScriptQuery);
+			QueryResultSet<Document> relScriptQueryResults = _irsApiClient.Repositories.Query(documentScript);
 			if (!relScriptQueryResults.Success)
 			{
-				throw new Exception(String.Format("An error occurred finding the script: {0}", relScriptQueryResults.Message));
+				throw new Exception(string.Format("An error occurred finding the script: {0}", relScriptQueryResults.Message));
 			}
 
 			if (!relScriptQueryResults.Results.Any())
 			{
-				throw new Exception(String.Format("No results returned: {0}", relScriptQueryResults.Message));
+				throw new Exception(string.Format("No results returned: {0}", relScriptQueryResults.Message));
 			}
-
-			//Retrieve script inputs
-			RelativityScript script = relScriptQueryResults.Results[0].Artifact;
-			var inputnames = GetRelativityScriptInput(_client, scriptName, workspaceArtifactId);
-			int savedsearchartifactid = Query_For_Saved_SearchID(savedSearchName, _client);
-
-			//Set inputs for script
-			RelativityScriptInput input = new RelativityScriptInput(inputnames[0], savedsearchartifactid.ToString());
-			RelativityScriptInput input2 = new RelativityScriptInput(inputnames[1], FieldName1);
-			RelativityScriptInput input6 = new RelativityScriptInput(inputnames[2], _FIELD2); //pass in as a paramter
-			RelativityScriptInput input7 = new RelativityScriptInput(inputnames[3], _FIELD3); //pass in as a paramter
-			RelativityScriptInput input8 = new RelativityScriptInput(inputnames[4], _FIELD4); //pass in as a paramter
-			RelativityScriptInput input3 = new RelativityScriptInput(inputnames[5], Delimiter);
-			RelativityScriptInput input4 = new RelativityScriptInput(inputnames[6], fieldToPopulate.ToString());
-			RelativityScriptInput input5 = new RelativityScriptInput(inputnames[7], CountToField.ToString());
-
-			//Execute the script
-			List<RelativityScriptInput> inputList = new List<RelativityScriptInput> { input, input2, input3, input4, input5, input6, input7, input8 };
-
-			RelativityScriptResult scriptResult = null;
-
-			try
-			{
-				scriptResult = _client.Repositories.RelativityScript.ExecuteRelativityScript(script, inputList);
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine("An error occurred: {0}", ex.Message);			
-			}
-
-			//Check for success.
-			if (!scriptResult.Success)
-			{
-				Console.WriteLine(string.Format(scriptResult.Message));
-			}
-			else
-			{
-				Int32 observedOutput = scriptResult.Count;
-				Console.WriteLine("Result returned: {0}", observedOutput);
-
-			}
-
-			return scriptResult;
 		}
 
-		public RelativityScriptResult ExecuteScript_Test(String scriptName, Int32 workspaceArtifactId, String savedSearchName, string FieldName1, String Delimiter, Int32 fieldToPopulate, Int32 CountToField)
-		{
-			_client.APIOptions.WorkspaceID = _workspaceId;
-
-			//Retrieve script by name
-			Query<RelativityScript> relScriptQuery = new Query<RelativityScript>
-			{
-				Condition = new TextCondition(RelativityScriptFieldNames.Name, TextConditionEnum.EqualTo, scriptName),
-				Fields = FieldValue.AllFields
-			};
-
-			QueryResultSet<RelativityScript> relScriptQueryResults = _client.Repositories.RelativityScript.Query(relScriptQuery);
-			if (!relScriptQueryResults.Success)
-			{
-				throw new Exception(String.Format("An error occurred finding the script: {0}", relScriptQueryResults.Message));
-			}
-
-			if (!relScriptQueryResults.Results.Any())
-			{
-				throw new Exception(String.Format("No results returned: {0}", relScriptQueryResults.Message));
-			}
-
-			//Retrieve script inputs
-			RelativityScript script = relScriptQueryResults.Results[0].Artifact;
-			var inputnames = GetRelativityScriptInput(_client, scriptName, workspaceArtifactId);
-			int savedsearchartifactid = Query_For_Saved_SearchID(savedSearchName, _client);
-
-			//Set inputs for script
-
-			//Execute the script
-			List<RelativityScriptInput> inputList = new List<RelativityScriptInput> {  };
-		
-			RelativityScriptResult scriptResult = null;
-
-			try
-			{
-				scriptResult = _client.Repositories.RelativityScript.ExecuteRelativityScript(script, inputList);
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine("An error occurred: {0}", ex.Message);
-			}
-
-			//Check for success.
-			if (!scriptResult.Success)
-			{
-				Console.WriteLine(string.Format(scriptResult.Message));
-			}
-			else
-			{
-				Int32 observedOutput = scriptResult.Count;
-				Console.WriteLine("Result returned: {0}", observedOutput);
-
-			}
-
-			return scriptResult;
-		}
-
-		public static Int32 GetFieldArtifactID(String fieldname, Int32 workspaceID, IRSAPIClient client, int rdoFieldArtifactId)
+		public static int GetFieldArtifactID(string fieldname, int workspaceID, IRSAPIClient client)
 		{
 			int fieldArtifactId = 0;
 			client.APIOptions.WorkspaceID = workspaceID;
 
-			kCura.Relativity.Client.DTOs.Query<kCura.Relativity.Client.DTOs.Field> query = new kCura.Relativity.Client.DTOs.Query<kCura.Relativity.Client.DTOs.Field>
+			Query<kCura.Relativity.Client.DTOs.Field> query = new Query<kCura.Relativity.Client.DTOs.Field>
 			{
-				Condition = new TextCondition(kCura.Relativity.Client.DTOs.ArtifactFieldNames.TextIdentifier, TextConditionEnum.EqualTo , fieldname),
-				Fields = kCura.Relativity.Client.DTOs.FieldValue.AllFields
+				Condition = new TextCondition(ArtifactFieldNames.TextIdentifier, TextConditionEnum.EqualTo , fieldname),
+				Fields = FieldValue.AllFields
 			};
 
-			kCura.Relativity.Client.DTOs.QueryResultSet<kCura.Relativity.Client.DTOs.Field> resultSet = client.Repositories.Field.Query(query);
+			QueryResultSet<kCura.Relativity.Client.DTOs.Field> resultSet = client.Repositories.Field.Query(query);
 			if (resultSet.Success)
 			{
 				fieldArtifactId = resultSet.Results[0].Artifact.ArtifactID;
@@ -254,80 +143,15 @@ namespace CreateObjectRecord
 			return fieldArtifactId;
 		}
 
-		public static List<String> GetRelativityScriptInput(IRSAPIClient client, String scriptName, Int32 workspaceArtifactID)
-		{
-
-			var returnval = new List<string>();
-			List<RelativityScriptInputDetails> scriptInputList = null;
-
-			int artifactid = GetScriptArtifactId(scriptName, workspaceArtifactID, client);
-
-			// STEP 1: Using ArtifactID, set the script you want to run.
-			kCura.Relativity.Client.DTOs.RelativityScript script = new kCura.Relativity.Client.DTOs.RelativityScript(artifactid);
-
-			// STEP 2: Call GetRelativityScriptInputs.
-			try
-			{
-				scriptInputList = client.Repositories.RelativityScript.GetRelativityScriptInputs(script);
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine(string.Format("An error occurred: {0}", ex.Message));
-				return returnval;
-			}
-
-
-			// STEP 3: Each RelativityScriptInputDetails object can be used to generate a RelativityScriptInput object, 
-			// but this example only displays information about each input.
-			foreach (RelativityScriptInputDetails relativityScriptInputDetails in scriptInputList)
-			{
-				// ACB: Removed because it's only necessary for debugging
-				//Console.WriteLine("Input Name: {0}\n ", //Input Id:  {1}\nInput Type: ",
-				//    relativityScriptInputDetails.Name);
-				////  relativityScriptInputDetails.Id);
-
-
-				returnval.Add(relativityScriptInputDetails.Name);
-			}
-			return returnval;
-		}
-
-		public static Int32 GetScriptArtifactId(String scriptName, Int32 workspaceID, IRSAPIClient _client)
-		{
-			int ScriptArtifactId = 0;
-
-			QueryResult result = null;
-
-			try
-			{
-				Query newQuery = new Query();
-				TextCondition queryCondition = new TextCondition(kCura.Relativity.Client.DTOs.RelativityScriptFieldNames.Name, TextConditionEnum.Like, scriptName);
-				newQuery.Condition = queryCondition;
-				newQuery.ArtifactTypeID = 28;
-				_client.APIOptions.StrictMode = false;
-				var results = _client.Query(_client.APIOptions, newQuery);
-				ScriptArtifactId = results.QueryArtifacts[0].ArtifactID;
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine("An error occurred: {0}", ex.Message);
-			}
-
-			return ScriptArtifactId;
-		}
-
-		public static Int32 GetWorkspaceId(String workspaceName, IRSAPIClient _client)
+	
+		public static int GetWorkspaceId(string workspaceName, IRSAPIClient _client)
 		{
 			_client.APIOptions.WorkspaceID = -1;
-
 			int workspaceArtifactId = 0;
-
-			QueryResult result = null;
-
 			try
 			{
 				Query newQuery = new Query();
-				TextCondition queryCondition = new TextCondition(kCura.Relativity.Client.DTOs.WorkspaceFieldNames.Name, TextConditionEnum.EqualTo , workspaceName);
+				TextCondition queryCondition = new TextCondition(WorkspaceFieldNames.Name, TextConditionEnum.EqualTo , workspaceName);
 				newQuery.Condition = queryCondition;
 				newQuery.ArtifactTypeID = 8;
 				_client.APIOptions.StrictMode = false;
@@ -342,14 +166,14 @@ namespace CreateObjectRecord
 			return workspaceArtifactId;
 		}
 
-		public static Int32 Query_For_Saved_SearchID(string savedSearchName, IRSAPIClient _client)
+		public static int Query_For_Saved_SearchID(string savedSearchName, IRSAPIClient _client)
 		{
 
 			int searchArtifactId = 0;
 
 			var query = new Query
 			{
-				ArtifactTypeID = (Int32)ArtifactType.Search,
+				ArtifactTypeID = (int)ArtifactType.Search,
 				Condition = new TextCondition("Name", TextConditionEnum.Like, savedSearchName)
 			};
 			QueryResult result = null;
@@ -371,14 +195,13 @@ namespace CreateObjectRecord
 			return searchArtifactId;
 		}
 
-		public static bool DeleteAllObjectsOfSpecificTypeInWorkspace(IRSAPIClient proxy, Int32 workspaceID, int artifactTypeID)
+		public static bool DeleteAllObjectsOfSpecificTypeInWorkspace(IRSAPIClient proxy, int workspaceID, int artifactTypeID)
 		{		
 			proxy.APIOptions.WorkspaceID = workspaceID;
-
 			//Query RDO
 			WholeNumberCondition condition = new WholeNumberCondition("Artifact ID", NumericConditionEnum.IsSet);
 
-			kCura.Relativity.Client.DTOs.Query<RDO> query = new Query<RDO>
+			Query<RDO> query = new Query<RDO>
 			{
 				ArtifactTypeID = artifactTypeID,
 				Condition = condition
@@ -391,7 +214,7 @@ namespace CreateObjectRecord
 			{
 				Console.WriteLine("Error deleting the object: " + results.Message);
 
-				for (Int32 i = 0; i <= results.Results.Count - 1; i++)
+				for (int i = 0; i <= results.Results.Count - 1; i++)
 				{
 					if (results.Results[i].Success)
 					{

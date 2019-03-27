@@ -14,7 +14,7 @@ namespace CreateObjectRecord.ImportHelper
 
 		public static void ImportDocument(int workspaceId)
 		{
-			Int32 identifyFieldArtifactID = 1003667;    // 'Control Number' Field
+			int identifyFieldArtifactID = 1003667;    // 'Control Number' Field
 			
 			ImportAPI iapi = new ImportAPI(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD, IMPORT_API_ENDPOINT);
 
