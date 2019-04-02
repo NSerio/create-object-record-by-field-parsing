@@ -1,15 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using DbContextHelper;
+﻿using DbContextHelper;
 using kCura.Relativity.Client;
 using kCura.Relativity.Client.DTOs;
 using NUnit.Framework;
 using Relativity.API;
+using Relativity.Services.Objects;
+using Relativity.Services.Objects.DataContracts;
 using Relativity.Test.Helpers.ServiceFactory.Extentions;
 using Relativity.Test.Helpers.SharedTestHelpers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using QueryResult = kCura.Relativity.Client.QueryResult;
-
 
 namespace CreateObjectRecord
 {
@@ -18,23 +20,26 @@ namespace CreateObjectRecord
 	{
 		#region variables
 
+
+		private const string _NSERIO_OBJECTTYPE_NAME = "NSerio";
+
 		private IRSAPIClient _client;
+		private IObjectManager _objectManagerClient;
 		private int _workspaceId;
+		private Int32 _artifactTypeID;
 		private readonly string _workspaceName = "Nserio - Regression Test";
 		private IDBContext _dbContext;
 		private IServicesMgr _servicesManager;
 		private IDBContext _eddsDbContext;
 		private const String _SCRIPT_NAME = "Create Object Records after Field Parsing";
 		private const String _SAVED_SEARCH_NAME = "Diana Test";
-		private const string _FIELD1 = "EmailTo";
-		private const string _FIELD2 = "";
-		private const string _FIELD3 = "";
-		private const string _FIELD4 = "";
-		private const string _FIELD5 = "";
+		private const string _FIELD1 = "Email To";
+		private const string _FIELD2 = "Email From";
+		private const string _FIELD3 = "Email CC";
+		private const string _FIELD4 = "Email BCC";
 		private const string _DELIMITER = ";";
 		private const string _FIELD_TO_POPULATE = "FieldToPopulate";
 		private const string _COUNTFIELD = "CountNserioField";
-		private static Int32 _ARTIFACTTYPEID = 1000046; // Find a better way to not hard code this
 		private Int32 _numberOfDocuments = 5;
 		private string _foldername = "Test Folder";
 		private Int32 _rootFolderArtifactID;
@@ -51,12 +56,15 @@ namespace CreateObjectRecord
 
 			var helper = Relativity.Test.Helpers.TestHelper.System();
 			_servicesManager = helper.GetServicesManager();
-			
+
 			//create client
 			_client = helper.GetServicesManager().GetProxy<IRSAPIClient>(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD);
-		
+			_objectManagerClient = helper.GetServicesManager().GetProxy<IObjectManager>(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD);
 			//Get workspace ID of the workspace for Nserio or Create a workspace
 			_workspaceId = GetWorkspaceId(_workspaceName, _client);
+			//set artifacttypeid
+			_artifactTypeID = GetNSerioArtifactTypeID();
+
 
 			// Create DBContext
 			_eddsDbContext = helper.GetDBContext(-1);
@@ -75,7 +83,7 @@ namespace CreateObjectRecord
 
 			//Importing the applications
 			Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathTestApp);
-		    Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathApp);
+			Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathApp);
 		}
 
 		#endregion
@@ -86,30 +94,97 @@ namespace CreateObjectRecord
 		public void Execute_TestFixtureTeardown()
 		{
 			//Delete all the results from script execution
-			DeleteAllObjectsOfSpecificTypeInWorkspace(_client, _workspaceId, _ARTIFACTTYPEID);
+			DeleteAllObjectsOfSpecificTypeInWorkspace(_client, _workspaceId, _artifactTypeID);
 		}
 
 		#endregion
 
 		#region Tests
 		[Test]
-		[Description("Verify the Relativity Script executes succesfully with 2 updates")]
+		[Description("Verify the Relativity Script executes succesfully")]
 		public void Integration_Test_Golden_Flow_Valid()
 		{
 			//Arrange
-			Int32 FieldToPopulate = GetFieldArtifactID(_FIELD_TO_POPULATE, _workspaceId, _client, _ARTIFACTTYPEID);
-			Int32 CountField = GetFieldArtifactID(_COUNTFIELD, _workspaceId, _client, _ARTIFACTTYPEID);
+			Int32 FieldToPopulate = GetFieldArtifactID(_FIELD_TO_POPULATE, _workspaceId, _client, _artifactTypeID);
+			Int32 CountField = GetFieldArtifactID(_COUNTFIELD, _workspaceId, _client, _artifactTypeID);
 
 			//Act
 			var scriptResults = ExecuteScript_CreateObjectRecordAfterFieldParsing(_SCRIPT_NAME, _workspaceId, _SAVED_SEARCH_NAME, _FIELD1, _DELIMITER, FieldToPopulate, CountField);
-		
+
 			//Assert
 			Assert.AreEqual(true, scriptResults.Success);
+		}
+
+		[Test]
+		[Description("Verify object records are created successfully")]
+		public void Integration_Test_Check_Created_Records()
+		{
+			//Arrange
+			Int32 FieldToPopulate = GetFieldArtifactID(_FIELD_TO_POPULATE, _workspaceId, _client, _artifactTypeID);
+			Int32 CountField = GetFieldArtifactID(_COUNTFIELD, _workspaceId, _client, _artifactTypeID);
+
+			//Act
+			var scriptResults = ExecuteScript_CreateObjectRecordAfterFieldParsing(_SCRIPT_NAME, _workspaceId, _SAVED_SEARCH_NAME, _FIELD1, _DELIMITER, FieldToPopulate, CountField);
+			var objectsWhereCreatedSuccessfully = GetCreatedObjectsStatus();
+			//Assert
+			Assert.AreEqual(true, scriptResults.Success);
+			Assert.AreEqual(true, objectsWhereCreatedSuccessfully);
 		}
 
 		#endregion
 
 		#region Helpers
+		public bool GetCreatedObjectsStatus()
+		{
+			bool state = false;
+			QueryRequest request = new QueryRequest();
+			request.ObjectType = new ObjectTypeRef { ArtifactTypeID = _artifactTypeID };
+			request.Fields = new[]
+			{
+				new FieldRef { Name = _FIELD_TO_POPULATE },
+				new FieldRef { Name = _COUNTFIELD }
+			};
+			Task<QueryResultSlim> taskForResult = _objectManagerClient.QuerySlimAsync(_workspaceId, request, 0, 1000);
+			QueryResultSlim result = GetQueryResultFromTask(taskForResult);
+
+
+			if (result.TotalCount > 0)
+			{
+				var extractedinfo = result.Objects.Select(p => p.Values[0] as string).ToArray();
+				if (extractedinfo.Contains("samplist.simpler@relativity.com") && extractedinfo.Contains("samplists@nserio.com"))
+				{
+					var extracteddocscount = result.Objects.Select(p => Convert.ToInt32(p.Values[1])).ToArray();
+					if (extracteddocscount.All(p => p == 1))
+					{
+						state = true;
+					}
+				}
+			}
+
+			return state;
+		}
+
+		public int GetNSerioArtifactTypeID()
+		{
+			QueryRequest request = new QueryRequest();
+			request.ObjectType = new ObjectTypeRef { ArtifactTypeID = (int)ArtifactType.ObjectType };
+			request.Fields = new[] { new FieldRef { Name = "Artifact Type ID" } };
+			request.Condition = $"('Name' IN ['{_NSERIO_OBJECTTYPE_NAME}'])";
+			Task<QueryResultSlim> taskForResult = _objectManagerClient.QuerySlimAsync(_workspaceId, request, 0, 1);
+			QueryResultSlim result = GetQueryResultFromTask(taskForResult);
+			var nserioType = result.Objects.FirstOrDefault();
+			if (nserioType == null)
+			{
+				throw new EntryPointNotFoundException($"Object Type {_NSERIO_OBJECTTYPE_NAME} not found");
+			}
+			return (int)(long)nserioType.Values.First();
+		}
+
+		public QueryResultSlim GetQueryResultFromTask(Task<QueryResultSlim> task)
+		{
+			QueryResultSlim result = task.ConfigureAwait(false).GetAwaiter().GetResult();
+			return result;
+		}
 
 		public RelativityScriptResult ExecuteScript_CreateObjectRecordAfterFieldParsing(String scriptName, Int32 workspaceArtifactId, String savedSearchName, string FieldName1, String Delimiter, Int32 fieldToPopulate, Int32 CountToField)
 		{
@@ -159,7 +234,7 @@ namespace CreateObjectRecord
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine("An error occurred: {0}", ex.Message);			
+				Console.WriteLine("An error occurred: {0}", ex.Message);
 			}
 
 			//Check for success.
@@ -207,8 +282,8 @@ namespace CreateObjectRecord
 			//Set inputs for script
 
 			//Execute the script
-			List<RelativityScriptInput> inputList = new List<RelativityScriptInput> {  };
-		
+			List<RelativityScriptInput> inputList = new List<RelativityScriptInput> { };
+
 			RelativityScriptResult scriptResult = null;
 
 			try
@@ -242,7 +317,7 @@ namespace CreateObjectRecord
 
 			kCura.Relativity.Client.DTOs.Query<kCura.Relativity.Client.DTOs.Field> query = new kCura.Relativity.Client.DTOs.Query<kCura.Relativity.Client.DTOs.Field>
 			{
-				Condition = new TextCondition(kCura.Relativity.Client.DTOs.ArtifactFieldNames.TextIdentifier, TextConditionEnum.EqualTo , fieldname),
+				Condition = new TextCondition(kCura.Relativity.Client.DTOs.ArtifactFieldNames.TextIdentifier, TextConditionEnum.EqualTo, fieldname),
 				Fields = kCura.Relativity.Client.DTOs.FieldValue.AllFields
 			};
 
@@ -327,7 +402,7 @@ namespace CreateObjectRecord
 			try
 			{
 				Query newQuery = new Query();
-				TextCondition queryCondition = new TextCondition(kCura.Relativity.Client.DTOs.WorkspaceFieldNames.Name, TextConditionEnum.EqualTo , workspaceName);
+				TextCondition queryCondition = new TextCondition(kCura.Relativity.Client.DTOs.WorkspaceFieldNames.Name, TextConditionEnum.EqualTo, workspaceName);
 				newQuery.Condition = queryCondition;
 				newQuery.ArtifactTypeID = 8;
 				_client.APIOptions.StrictMode = false;
@@ -372,7 +447,7 @@ namespace CreateObjectRecord
 		}
 
 		public static bool DeleteAllObjectsOfSpecificTypeInWorkspace(IRSAPIClient proxy, Int32 workspaceID, int artifactTypeID)
-		{		
+		{
 			proxy.APIOptions.WorkspaceID = workspaceID;
 
 			//Query RDO

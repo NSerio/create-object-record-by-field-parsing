@@ -1,8 +1,9 @@
-﻿using System;
-using System.Data;
-using kCura.Relativity.DataReaderClient;
+﻿using kCura.Relativity.DataReaderClient;
 using kCura.Relativity.ImportAPI;
 using Relativity.Test.Helpers.SharedTestHelpers;
+using System;
+using System.Data;
+using System.IO;
 
 namespace CreateObjectRecord.ImportHelper
 {
@@ -15,7 +16,7 @@ namespace CreateObjectRecord.ImportHelper
 		public static void ImportDocument(int workspaceId)
 		{
 			Int32 identifyFieldArtifactID = 1003667;    // 'Control Number' Field
-			
+
 			ImportAPI iapi = new ImportAPI(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD, IMPORT_API_ENDPOINT);
 
 			var importJob = iapi.NewNativeDocumentImportJob();
@@ -46,10 +47,13 @@ namespace CreateObjectRecord.ImportHelper
 			// The document identifer column name must match the field name in the workspace.
 			table.Columns.Add("Control Number", typeof(string));
 			table.Columns.Add("Original Folder Path", typeof(string));
-			table.Rows.Add("11Works", @"C:\temp\try2.txt");
-			table.Rows.Add("21Works", @"C:\temp\newdoctext.txt");
-			table.Rows.Add("31Works", @"C:\temp\try2.txt");
-			table.Rows.Add("41Works", @"C:\temp\newdoctext.txt");
+			table.Columns.Add("Email From", typeof(string));
+			table.Columns.Add("Email To", typeof(string));
+			table.Columns.Add("Email CC", typeof(string));
+			table.Columns.Add("Email BCC", typeof(string));
+			string filePath = @"..\\SampleFile";
+			string content = File.ReadAllText(filePath);
+			table.Rows.Add("11Works", filePath, content, content, content, content);
 
 			return table;
 		}
