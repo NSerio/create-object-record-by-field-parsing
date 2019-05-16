@@ -61,7 +61,7 @@ namespace CreateObjectRecord
 			_client = helper.GetServicesManager().GetProxy<IRSAPIClient>(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD);
 			_objectManagerClient = helper.GetServicesManager().GetProxy<IObjectManager>(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD);
 			//Get workspace ID of the workspace for Nserio or Create a workspace
-			_workspaceId = GetWorkspaceId(_workspaceName, _client);
+			_workspaceId = GetWorkspaceId(_workspaceName, _objectManagerClient);
 			//set artifacttypeid
 			_artifactTypeID = GetNSerioArtifactTypeID();
 
@@ -391,23 +391,22 @@ namespace CreateObjectRecord
 			return ScriptArtifactId;
 		}
 
-		public static Int32 GetWorkspaceId(String workspaceName, IRSAPIClient _client)
+		public static Int32 GetWorkspaceId(String workspaceName, IObjectManager _client)
 		{
-			_client.APIOptions.WorkspaceID = -1;
-
 			int workspaceArtifactId = 0;
 
 			QueryResult result = null;
 
 			try
 			{
-				Query newQuery = new Query();
-				TextCondition queryCondition = new TextCondition(kCura.Relativity.Client.DTOs.WorkspaceFieldNames.Name, TextConditionEnum.EqualTo, workspaceName);
-				newQuery.Condition = queryCondition;
-				newQuery.ArtifactTypeID = 8;
-				_client.APIOptions.StrictMode = false;
-				var results = _client.Query(_client.APIOptions, newQuery);
-				workspaceArtifactId = results.QueryArtifacts[0].ArtifactID;
+				QueryRequest queryRequest = new QueryRequest();
+				queryRequest.ObjectType = new ObjectTypeRef { ArtifactTypeID = (int)ArtifactType.Case };
+				queryRequest.Condition = $"('{WorkspaceFieldNames.Name}' IN ['{workspaceName}'])";
+				QueryResultSlim results = _client.QuerySlimAsync(-1, queryRequest, 1, 1)
+					.ConfigureAwait(false)
+					.GetAwaiter()
+					.GetResult();
+				workspaceArtifactId = results.Objects[0].ArtifactID;
 			}
 			catch (Exception ex)
 			{
