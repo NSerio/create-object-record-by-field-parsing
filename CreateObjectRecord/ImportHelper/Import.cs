@@ -51,7 +51,7 @@ namespace CreateObjectRecord.ImportHelper
 			table.Columns.Add("Email To", typeof(string));
 			table.Columns.Add("Email CC", typeof(string));
 			table.Columns.Add("Email BCC", typeof(string));
-			string filePath = @"..\\SampleFile.txt";
+			string filePath = @".\\SampleFile.txt";
 			string content = File.ReadAllText(filePath);
 			table.Rows.Add("11Works", filePath, content, content, content, content);
 

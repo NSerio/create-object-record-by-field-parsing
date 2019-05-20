@@ -7,6 +7,7 @@ using Relativity.Services.Objects;
 using Relativity.Services.Objects.DataContracts;
 using Relativity.Test.Helpers.ServiceFactory.Extentions;
 using Relativity.Test.Helpers.SharedTestHelpers;
+using Relativity.Test.Helpers.WorkspaceHelpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,22 +28,24 @@ namespace CreateObjectRecord
 		private IObjectManager _objectManagerClient;
 		private int _workspaceId;
 		private Int32 _artifactTypeID;
-		private readonly string _workspaceName = "Nserio - Regression Test";
+		private readonly string _workspaceName = ConfigurationHelper.TEST_WORKSPACE_NAME;
+		private readonly string _workspaceTemplateName = ConfigurationHelper.TEST_WORKSPACE_TEMPLATE_NAME;
 		private IDBContext _dbContext;
 		private IServicesMgr _servicesManager;
 		private IDBContext _eddsDbContext;
 		private const String _SCRIPT_NAME = "Create Object Records after Field Parsing";
 		private const String _SAVED_SEARCH_NAME = "Diana Test";
-		private const string _FIELD1 = "Email To";
-		private const string _FIELD2 = "Email From";
-		private const string _FIELD3 = "Email CC";
-		private const string _FIELD4 = "Email BCC";
+		private const string _FIELD1 = "EmailTo";
+		private const string _FIELD2 = "EmailFrom";
+		private const string _FIELD3 = "EmailCC";
+		private const string _FIELD4 = "EmailBCC";
 		private const string _DELIMITER = ";";
 		private const string _FIELD_TO_POPULATE = "FieldToPopulate";
 		private const string _COUNTFIELD = "CountNserioField";
 		private Int32 _numberOfDocuments = 5;
 		private string _foldername = "Test Folder";
 		private Int32 _rootFolderArtifactID;
+		private bool _workspaceCreatedByTest;
 
 		#endregion
 
@@ -62,6 +65,12 @@ namespace CreateObjectRecord
 			_objectManagerClient = helper.GetServicesManager().GetProxy<IObjectManager>(ConfigurationHelper.ADMIN_USERNAME, ConfigurationHelper.DEFAULT_PASSWORD);
 			//Get workspace ID of the workspace for Nserio or Create a workspace
 			_workspaceId = GetWorkspaceId(_workspaceName, _objectManagerClient);
+			if (_workspaceId == 0) //-- if no workspace found, create it
+			{
+				_workspaceId = CreateWorkspace.Create(_client, _workspaceName, _workspaceTemplateName);
+				_workspaceCreatedByTest = true;
+			}
+
 			//set artifacttypeid
 			_artifactTypeID = GetNSerioArtifactTypeID();
 
@@ -76,10 +85,10 @@ namespace CreateObjectRecord
 
 			//Import Application to the workspace
 			//File path of the Test App
-			var filepathTestApp = "..\\RA_Create_Object_Record_Test_APP.rap";
+			var filepathTestApp = ".\\RA_Create_Object_Record_Test_APP.rap";
 
 			//File path of the application containing the actual script
-			var filepathApp = "..\\RA_Create_Object_Records_After_Field_Parsing.rap";
+			var filepathApp = ".\\RA_Create_Object_Records_After_Field_Parsing.rap";
 
 			//Importing the applications
 			Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathTestApp);
@@ -93,8 +102,15 @@ namespace CreateObjectRecord
 		[OneTimeTearDown]
 		public void Execute_TestFixtureTeardown()
 		{
-			//Delete all the results from script execution
-			DeleteAllObjectsOfSpecificTypeInWorkspace(_client, _workspaceId, _artifactTypeID);
+			if (_workspaceCreatedByTest)
+			{ //-- delete the workspace created by the test execution
+				DeleteWorkspace.Delete(_client, _workspaceId);
+			}
+			else
+			{
+				//Delete all the results from script execution
+				DeleteAllObjectsOfSpecificTypeInWorkspace(_client, _workspaceId, _artifactTypeID);
+			}
 		}
 
 		#endregion
