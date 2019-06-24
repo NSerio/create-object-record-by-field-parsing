@@ -1,5 +1,4 @@
-﻿using DbContextHelper;
-using kCura.Relativity.Client;
+﻿using kCura.Relativity.Client;
 using kCura.Relativity.Client.DTOs;
 using NUnit.Framework;
 using Relativity.API;
@@ -10,7 +9,9 @@ using Relativity.Test.Helpers.SharedTestHelpers;
 using Relativity.Test.Helpers.WorkspaceHelpers;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using QueryResult = kCura.Relativity.Client.QueryResult;
 
@@ -30,7 +31,6 @@ namespace CreateObjectRecord
 		private Int32 _artifactTypeID;
 		private readonly string _workspaceName = ConfigurationHelper.TEST_WORKSPACE_NAME;
 		private readonly string _workspaceTemplateName = ConfigurationHelper.TEST_WORKSPACE_TEMPLATE_NAME;
-		private IDBContext _dbContext;
 		private IServicesMgr _servicesManager;
 		private IDBContext _eddsDbContext;
 		private const String _SCRIPT_NAME = "Create Object Records after Field Parsing";
@@ -71,28 +71,32 @@ namespace CreateObjectRecord
 				_workspaceCreatedByTest = true;
 			}
 
-			//set artifacttypeid
-			_artifactTypeID = GetNSerioArtifactTypeID();
-
-
-			// Create DBContext
-			_eddsDbContext = helper.GetDBContext(-1);
-			_dbContext = new DbContext(ConfigurationHelper.SQL_SERVER_ADDRESS, "EDDS" + _workspaceId, ConfigurationHelper.SQL_USER_NAME, ConfigurationHelper.SQL_PASSWORD);
 			_client.APIOptions.WorkspaceID = _workspaceId;
 
-			//Import Documents to workspace
-			ImportHelper.Import.ImportDocument(_workspaceId);
+			var path = GetLocalDocumentsFolderPath();
+
 
 			//Import Application to the workspace
 			//File path of the Test App
-			var filepathTestApp = ".\\RA_Create_Object_Record_Test_APP.rap";
+			string[] path1 = { path, "RA_Create_Object_Record_Test_APP.rap" };
+			string filepathTestApp = Path.Combine(path1);
 
 			//File path of the application containing the actual script
-			var filepathApp = ".\\RA_Create_Object_Records_After_Field_Parsing.rap";
+			string[] path2 = { path, "RA_Create_Object_Records_After_Field_Parsing.rap" };
+			string filepathApp = Path.Combine(path2);
+
 
 			//Importing the applications
 			Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathTestApp);
 			Relativity.Test.Helpers.Application.ApplicationHelpers.ImportApplication(_client, _workspaceId, true, filepathApp);
+
+			//set artifacttypeid
+			_artifactTypeID = GetNSerioArtifactTypeID();
+
+			//Import Documents to workspace
+			ImportHelper.Import.ImportDocument(_workspaceId, path);
+
+
 		}
 
 		#endregion
@@ -150,6 +154,20 @@ namespace CreateObjectRecord
 		#endregion
 
 		#region Helpers
+
+		private string GetLocalDocumentsFolderPath()
+		{
+			//string path = Path.Combine(Environment.CurrentDirectory, "Resources");
+			Assembly executingAssembly = Assembly.GetExecutingAssembly();
+			string binFolderPath = Path.GetDirectoryName(executingAssembly.Location);
+			if (binFolderPath == null)
+			{
+				throw new Exception("Bin folder path is empty");
+			}
+
+			string path = Path.Combine(binFolderPath);
+			return path;
+		}
 		public bool GetCreatedObjectsStatus()
 		{
 			bool state = false;

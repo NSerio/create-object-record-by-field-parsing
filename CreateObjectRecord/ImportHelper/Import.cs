@@ -9,11 +9,11 @@ namespace CreateObjectRecord.ImportHelper
 {
 	public class Import
 	{
-		private static readonly string IMPORT_API_ENDPOINT = $"{ConfigurationHelper.SERVER_BINDING_TYPE}://{ConfigurationHelper.RSAPI_SERVER_ADDRESS}/Relativitywebapi/";
+		private static readonly string IMPORT_API_ENDPOINT = $"{ConfigurationHelper.SERVER_BINDING_TYPE}://{ConfigurationHelper.REST_SERVER_ADDRESS}/Relativitywebapi/";
 		const string PARENT_OBJECT_ID_SOURCE_FIELD_NAME = "Test Folder";
 		const string CONTROL_NUMBER = "Control Number";
 
-		public static void ImportDocument(int workspaceId)
+		public static void ImportDocument(int workspaceId, string path)
 		{
 			Int32 identifyFieldArtifactID = 1003667;    // 'Control Number' Field
 
@@ -32,7 +32,7 @@ namespace CreateObjectRecord.ImportHelper
 			importJob.Settings.OverwriteMode = OverwriteModeEnum.Append;
 
 			importJob.Settings.IdentityFieldId = identifyFieldArtifactID;
-			importJob.SourceData.SourceData = GetDocumentDataTable().CreateDataReader();
+			importJob.SourceData.SourceData = GetDocumentDataTable(path).CreateDataReader();
 
 			Console.WriteLine("=======>>>>> Executing import...");
 
@@ -40,7 +40,7 @@ namespace CreateObjectRecord.ImportHelper
 
 		}
 
-		public static DataTable GetDocumentDataTable()
+		public static DataTable GetDocumentDataTable(string path)
 		{
 			DataTable table = new DataTable();
 
@@ -51,7 +51,9 @@ namespace CreateObjectRecord.ImportHelper
 			table.Columns.Add("Email To", typeof(string));
 			table.Columns.Add("Email CC", typeof(string));
 			table.Columns.Add("Email BCC", typeof(string));
-			string filePath = @".\\SampleFile.txt";
+			//string filePath = @"\SampleFile.txt";
+			string[] paths = { path, @"SampleFile.txt" };
+			string filePath = Path.Combine(paths);
 			string content = File.ReadAllText(filePath);
 			table.Rows.Add("11Works", filePath, content, content, content, content);
 
