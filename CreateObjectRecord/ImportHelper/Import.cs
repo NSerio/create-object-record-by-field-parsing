@@ -29,7 +29,7 @@ namespace CreateObjectRecord.ImportHelper
 
 			importJob.Settings.NativeFilePathSourceFieldName = "Original Folder Path";
 			importJob.Settings.NativeFileCopyMode = NativeFileCopyModeEnum.CopyFiles; // NativeFileCopyModeEnum.CopyFiles; NativeFileCopyModeEnum.DoNotImportNativeFiles
-			importJob.Settings.OverwriteMode = OverwriteModeEnum.Append;
+			importJob.Settings.OverwriteMode = OverwriteModeEnum.AppendOverlay;
 
 			importJob.Settings.IdentityFieldId = identifyFieldArtifactID;
 			importJob.SourceData.SourceData = GetDocumentDataTable(path).CreateDataReader();

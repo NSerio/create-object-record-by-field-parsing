@@ -495,13 +495,13 @@ namespace CreateObjectRecord
 			QueryResultSet<RDO> results = new QueryResultSet<RDO>();
 			results = proxy.Repositories.RDO.Query(query);
 
-			if (results.Success)
+			if (!results.Success)
 			{
 				Console.WriteLine("Error deleting the object: " + results.Message);
 
 				for (Int32 i = 0; i <= results.Results.Count - 1; i++)
 				{
-					if (results.Results[i].Success)
+					if (!results.Results[i].Success)
 					{
 						proxy.Repositories.RDO.Delete(results.Results[i].Artifact);
 					}
